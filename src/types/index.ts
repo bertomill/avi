@@ -229,6 +229,29 @@ export interface AIContext {
     publishedAt: string;
     categories: string[];
   }[];
+  // TikTok data
+  tiktokStats?: {
+    followers: number;
+    following: number;
+    likes: number;
+    videos: number;
+  };
+  topTikTokVideos?: {
+    title: string;
+    description: string;
+    views: number;
+    likes: number;
+    comments: number;
+    shares: number;
+    engagement: number;
+  }[];
+  recentTikTokVideos?: {
+    title: string;
+    description: string;
+    createdAt: string;
+    views: number;
+    likes: number;
+  }[];
 }
 
 // Medium Article data from RSS feed

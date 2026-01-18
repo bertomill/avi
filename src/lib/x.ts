@@ -1,4 +1,5 @@
 import { XUserData, XTweetData, XAnalytics } from '@/types';
+import { supabase } from './supabase';
 
 const X_API_BASE = 'https://api.twitter.com/2';
 
@@ -73,23 +74,28 @@ export async function getUserTweets(
   maxResults: number = 100
 ): Promise<XTweetData[]> {
   try {
-    const response = await fetch(
-      `${X_API_BASE}/users/${userId}/tweets?max_results=${Math.min(maxResults, 100)}&tweet.fields=id,text,created_at,public_metrics`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
+    const url = `${X_API_BASE}/users/${userId}/tweets?max_results=${Math.min(maxResults, 100)}&tweet.fields=id,text,created_at,public_metrics`;
+    console.log('Fetching tweets from:', url);
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const responseText = await response.text();
+    console.log('X API tweets response status:', response.status);
+    console.log('X API tweets response:', responseText);
 
     if (!response.ok) {
-      console.error('X API error fetching tweets:', await response.text());
+      console.error('X API error fetching tweets:', responseText);
       return [];
     }
 
-    const data = await response.json();
+    const data = JSON.parse(responseText);
 
     if (!data.data) {
+      console.log('No tweets data in response');
       return [];
     }
 
@@ -200,4 +206,132 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
     console.error('Error refreshing X token:', error);
     return null;
   }
+}
+
+// ============================================
+// Supabase Sync Functions
+// ============================================
+
+// Sync X profile to Supabase
+export async function syncProfileToSupabase(
+  userId: string,
+  userData: XUserData
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('XProfile')
+      .upsert({
+        id: userData.id,
+        userId,
+        username: userData.username,
+        name: userData.name,
+        description: userData.description,
+        profileImageUrl: userData.profileImageUrl,
+        followersCount: userData.followersCount,
+        followingCount: userData.followingCount,
+        tweetCount: userData.tweetCount,
+        verified: userData.verified,
+        updatedAt: new Date().toISOString(),
+        syncedAt: new Date().toISOString(),
+      }, {
+        onConflict: 'userId',
+      });
+
+    if (error) {
+      console.error('Error syncing X profile to Supabase:', error);
+      throw error;
+    }
+
+    console.log('X profile synced to Supabase for user:', userId);
+  } catch (error) {
+    console.error('Error in syncProfileToSupabase:', error);
+    throw error;
+  }
+}
+
+// Sync X tweets to Supabase
+export async function syncTweetsToSupabase(
+  userId: string,
+  profileId: string,
+  tweets: XTweetData[]
+): Promise<void> {
+  try {
+    // Prepare tweet data for upsert
+    const tweetRecords = tweets.map(tweet => ({
+      id: tweet.id,
+      profileId,
+      userId,
+      text: tweet.text,
+      createdAt: tweet.createdAt,
+      impressionCount: tweet.publicMetrics.impressionCount,
+      likeCount: tweet.publicMetrics.likeCount,
+      retweetCount: tweet.publicMetrics.retweetCount,
+      replyCount: tweet.publicMetrics.replyCount,
+      quoteCount: tweet.publicMetrics.quoteCount,
+      syncedAt: new Date().toISOString(),
+    }));
+
+    // Upsert tweets in batches of 50
+    const batchSize = 50;
+    for (let i = 0; i < tweetRecords.length; i += batchSize) {
+      const batch = tweetRecords.slice(i, i + batchSize);
+      const { error } = await supabase
+        .from('XTweet')
+        .upsert(batch, {
+          onConflict: 'id',
+        });
+
+      if (error) {
+        console.error('Error syncing X tweets batch to Supabase:', error);
+        throw error;
+      }
+    }
+
+    console.log(`Synced ${tweets.length} X tweets to Supabase for user:`, userId);
+  } catch (error) {
+    console.error('Error in syncTweetsToSupabase:', error);
+    throw error;
+  }
+}
+
+// Sync all X data (profile + tweets) to Supabase
+export async function syncXDataToSupabase(
+  userId: string,
+  analytics: XAnalytics
+): Promise<void> {
+  await syncProfileToSupabase(userId, analytics.user);
+  await syncTweetsToSupabase(userId, analytics.user.id, analytics.tweets);
+}
+
+// Get X profile from Supabase
+export async function getProfileFromSupabase(userId: string) {
+  const { data, error } = await supabase
+    .from('XProfile')
+    .select('*')
+    .eq('userId', userId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching X profile from Supabase:', error);
+    return null;
+  }
+
+  return data;
+}
+
+// Get X tweets from Supabase
+export async function getTweetsFromSupabase(userId: string, limit: number = 100) {
+  const { data, error } = await supabase
+    .from('XTweet')
+    .select('*')
+    .eq('userId', userId)
+    .order('createdAt', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Error fetching X tweets from Supabase:', error);
+    return [];
+  }
+
+  return data || [];
 }

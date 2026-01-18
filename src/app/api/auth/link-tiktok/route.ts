@@ -22,11 +22,14 @@ export async function GET() {
   }
 
   // Store the user ID in a cookie for the callback
+  // Using sameSite: 'none' with secure: true for cross-site OAuth redirects
   const cookieStore = await cookies();
+  const isHttps = process.env.NEXTAUTH_URL?.startsWith('https');
+
   cookieStore.set('tiktok_link_user_id', session.user.id, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isHttps,
+    sameSite: isHttps ? 'none' : 'lax',
     maxAge: 60 * 10, // 10 minutes
     path: '/',
   });
@@ -35,8 +38,8 @@ export async function GET() {
   const state = Math.random().toString(36).substring(2) + Date.now().toString(36);
   cookieStore.set('tiktok_oauth_state', state, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isHttps,
+    sameSite: isHttps ? 'none' : 'lax',
     maxAge: 60 * 10,
     path: '/',
   });
@@ -48,8 +51,8 @@ export async function GET() {
   // Store code verifier in cookie for the callback
   cookieStore.set('tiktok_code_verifier', codeVerifier, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isHttps,
+    sameSite: isHttps ? 'none' : 'lax',
     maxAge: 60 * 10,
     path: '/',
   });

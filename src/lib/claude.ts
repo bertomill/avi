@@ -44,9 +44,25 @@ export function buildSystemPrompt(context: AIContext): string {
     )
     .join('\n');
 
+  // TikTok data
+  const topTikTokVideosInfo = context.topTikTokVideos
+    ?.map(
+      (v, i) =>
+        `${i + 1}. "${v.title || v.description || 'Untitled'}" - ${v.views.toLocaleString()} views, ${v.likes.toLocaleString()} likes, ${v.engagement.toFixed(1)}% engagement`
+    )
+    .join('\n');
+
+  const recentTikTokVideosInfo = context.recentTikTokVideos
+    ?.map(
+      (v, i) =>
+        `${i + 1}. "${v.title || v.description || 'Untitled'}" (${v.createdAt}) - ${v.views} views, ${v.likes} likes`
+    )
+    .join('\n');
+
   const hasYouTube = context.channelStats && context.channelStats.subscribers > 0;
   const hasInstagram = context.instagramStats && context.instagramStats.followers > 0;
   const hasMedium = context.mediumStats && context.mediumStats.totalArticles > 0;
+  const hasTikTok = context.tiktokStats && context.tiktokStats.followers > 0;
 
   let prompt = `You are an expert content strategist and AI assistant helping a creator optimize their social media presence. You have access to their analytics and should provide personalized, data-driven recommendations.
 
@@ -101,6 +117,23 @@ ${recentArticlesInfo || 'No article data available yet.'}
 `;
   }
 
+  // TikTok section
+  if (hasTikTok) {
+    prompt += `## TikTok Account Overview
+- Followers: ${context.tiktokStats!.followers.toLocaleString()}
+- Following: ${context.tiktokStats!.following.toLocaleString()}
+- Total Likes: ${context.tiktokStats!.likes.toLocaleString()}
+- Total Videos: ${context.tiktokStats!.videos}
+
+## Top Performing TikTok Videos (by views)
+${topTikTokVideosInfo || 'No video data available yet.'}
+
+## Recent TikTok Videos
+${recentTikTokVideosInfo || 'No recent video data available.'}
+
+`;
+  }
+
   prompt += `## Your Capabilities
 You can help with:
 1. **Content Ideation**: Suggest content ideas based on what's performing well
@@ -108,13 +141,15 @@ You can help with:
 3. **Title Optimization**: Craft compelling, SEO-friendly video titles
 4. **Description Writing**: Create engaging descriptions with proper keywords
 5. **Script Assistance**: Help write or improve video scripts
-6. **Hashtag Strategy**: Recommend effective hashtags for Instagram
+6. **Hashtag Strategy**: Recommend effective hashtags for Instagram and TikTok
 7. **Visual Concepts**: Suggest thumbnail and post visual ideas
 8. **Content Strategy**: Analyze gaps and opportunities across platforms
 9. **Trend Analysis**: Identify patterns in successful content
 10. **Posting Strategy**: Recommend optimal posting frequency and timing
 11. **Blog Writing**: Help write or improve Medium articles
 12. **Content Repurposing**: Suggest ways to turn blog posts into videos or social content
+13. **TikTok Trends**: Suggest trending sounds, effects, and formats for TikTok
+14. **Short-Form Video**: Help create engaging hooks and TikTok-specific content strategies
 
 Always base your recommendations on the creator's actual data and performance patterns. Be specific, actionable, and encouraging while maintaining honesty about what's working and what could improve.`;
 

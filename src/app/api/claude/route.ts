@@ -2,13 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { chatWithClaude, generateContentIdeas, optimizeTitle, analyzeContentGaps } from '@/lib/claude';
-import { getFullAnalytics } from '@/lib/youtube';
 import { getMediumAnalytics } from '@/lib/medium';
+import { getTikTokAnalytics } from '@/lib/tiktok';
 import { AIContext, ChatMessage } from '@/types';
 import { supabase } from '@/lib/supabase';
 
-function buildAIContext(analytics: Awaited<ReturnType<typeof getFullAnalytics>>): AIContext {
-  if (!analytics) {
+// Build AI context from Supabase database
+async function buildAIContextFromDatabase(userId: string): Promise<AIContext> {
+  // Get YouTube channel data from database
+  const { data: channel } = await supabase
+    .from('YouTubeChannel')
+    .select('*')
+    .eq('userId', userId)
+    .single();
+
+  if (!channel) {
     return {
       channelStats: { subscribers: 0, totalViews: 0, videoCount: 0 },
       topPerformingVideos: [],
@@ -16,24 +24,40 @@ function buildAIContext(analytics: Awaited<ReturnType<typeof getFullAnalytics>>)
     };
   }
 
+  // Get videos sorted by views (top performing)
+  const { data: topVideos } = await supabase
+    .from('YouTubeVideo')
+    .select('*')
+    .eq('channelId', channel.id)
+    .order('viewCount', { ascending: false })
+    .limit(5);
+
+  // Get recent videos
+  const { data: recentVideos } = await supabase
+    .from('YouTubeVideo')
+    .select('*')
+    .eq('channelId', channel.id)
+    .order('publishedAt', { ascending: false })
+    .limit(10);
+
   return {
     channelStats: {
-      subscribers: analytics.channel.subscriberCount,
-      totalViews: analytics.channel.viewCount,
-      videoCount: analytics.channel.videoCount,
+      subscribers: channel.subscriberCount || 0,
+      totalViews: channel.viewCount || 0,
+      videoCount: channel.videoCount || 0,
     },
-    topPerformingVideos: analytics.topVideos.map((v) => ({
+    topPerformingVideos: (topVideos || []).map((v) => ({
       title: v.title,
-      views: v.viewCount,
+      views: v.viewCount || 0,
       engagement:
-        v.viewCount > 0
-          ? ((v.likeCount + v.commentCount) / v.viewCount) * 100
+        (v.viewCount || 0) > 0
+          ? (((v.likeCount || 0) + (v.commentCount || 0)) / v.viewCount) * 100
           : 0,
     })),
-    recentContent: analytics.videos.slice(0, 10).map((v) => ({
+    recentContent: (recentVideos || []).map((v) => ({
       title: v.title,
-      publishedAt: new Date(v.publishedAt).toLocaleDateString(),
-      performance: v.viewCount,
+      publishedAt: v.publishedAt ? new Date(v.publishedAt).toLocaleDateString() : 'Unknown',
+      performance: v.viewCount || 0,
     })),
   };
 }
@@ -49,27 +73,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { action, messages, title, keyPoints } = body;
 
-    // Get the user's Google account access token
-    const { data: account } = await supabase
-      .from('Account')
-      .select('*')
-      .eq('userId', session.user.id)
-      .eq('provider', 'google')
-      .single();
-
-    let context: AIContext;
-
-    if (account?.access_token) {
-      const analytics = await getFullAnalytics(account.access_token);
-      context = buildAIContext(analytics);
-    } else {
-      // Allow AI chat even without YouTube connected, with empty context
-      context = {
-        channelStats: { subscribers: 0, totalViews: 0, videoCount: 0 },
-        topPerformingVideos: [],
-        recentContent: [],
-      };
-    }
+    // Get AI context from database (YouTube data)
+    let context: AIContext = await buildAIContextFromDatabase(session.user.id);
 
     // Get Medium data if connected
     const { data: user } = await supabase
@@ -89,6 +94,44 @@ export async function POST(request: NextRequest) {
           title: a.title,
           publishedAt: new Date(a.publishedAt).toLocaleDateString(),
           categories: a.categories,
+        }));
+      }
+    }
+
+    // Get TikTok data if connected
+    const { data: tiktokAccount } = await supabase
+      .from('Account')
+      .select('access_token')
+      .eq('userId', session.user.id)
+      .eq('provider', 'tiktok')
+      .single();
+
+    if (tiktokAccount?.access_token) {
+      const tiktokAnalytics = await getTikTokAnalytics(tiktokAccount.access_token);
+      if (tiktokAnalytics) {
+        context.tiktokStats = {
+          followers: tiktokAnalytics.user.follower_count || 0,
+          following: tiktokAnalytics.user.following_count || 0,
+          likes: tiktokAnalytics.user.likes_count || 0,
+          videos: tiktokAnalytics.user.video_count || 0,
+        };
+        context.topTikTokVideos = tiktokAnalytics.topVideos.map(v => ({
+          title: v.title || '',
+          description: v.video_description || '',
+          views: v.view_count || 0,
+          likes: v.like_count || 0,
+          comments: v.comment_count || 0,
+          shares: v.share_count || 0,
+          engagement: (v.view_count || 0) > 0
+            ? (((v.like_count || 0) + (v.comment_count || 0) + (v.share_count || 0)) / (v.view_count || 1)) * 100
+            : 0,
+        }));
+        context.recentTikTokVideos = tiktokAnalytics.videos.slice(0, 10).map(v => ({
+          title: v.title || '',
+          description: v.video_description || '',
+          createdAt: new Date(v.create_time * 1000).toLocaleDateString(),
+          views: v.view_count || 0,
+          likes: v.like_count || 0,
         }));
       }
     }

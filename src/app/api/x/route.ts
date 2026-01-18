@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { getFullAnalytics, refreshAccessToken } from '@/lib/x';
+import { getFullAnalytics, refreshAccessToken, syncXDataToSupabase } from '@/lib/x';
 import { supabase } from '@/lib/supabase';
 
 export async function GET() {
@@ -67,6 +67,15 @@ export async function GET() {
         { error: 'Could not fetch X data' },
         { status: 500 }
       );
+    }
+
+    // Sync data to Supabase for AI agent access
+    try {
+      await syncXDataToSupabase(session.user.id, analytics);
+      console.log('X data synced to Supabase');
+    } catch (syncError) {
+      // Log but don't fail the request if sync fails
+      console.error('Failed to sync X data to Supabase:', syncError);
     }
 
     return NextResponse.json(analytics);
