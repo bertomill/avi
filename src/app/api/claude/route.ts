@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { chatWithClaude, generateContentIdeas, optimizeTitle, analyzeContentGaps } from '@/lib/claude';
 import { getFullAnalytics } from '@/lib/youtube';
 import { AIContext, ChatMessage } from '@/types';
-import prisma from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 
 function buildAIContext(analytics: Awaited<ReturnType<typeof getFullAnalytics>>): AIContext {
   if (!analytics) {
@@ -49,12 +49,12 @@ export async function POST(request: NextRequest) {
     const { action, messages, title, keyPoints } = body;
 
     // Get the user's Google account access token
-    const account = await prisma.account.findFirst({
-      where: {
-        userId: session.user.id,
-        provider: 'google',
-      },
-    });
+    const { data: account } = await supabase
+      .from('Account')
+      .select('*')
+      .eq('userId', session.user.id)
+      .eq('provider', 'google')
+      .single();
 
     let context: AIContext;
 

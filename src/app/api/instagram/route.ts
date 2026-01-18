@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { getFullAnalytics, syncAccountToDatabase, getCachedAnalytics } from '@/lib/instagram';
-import prisma from '@/lib/prisma';
+import { getFullAnalytics } from '@/lib/instagram';
+import { supabase } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,13 +12,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get the user's Instagram account access token
-    const account = await prisma.account.findFirst({
-      where: {
-        userId: session.user.id,
-        provider: 'instagram',
-      },
-    });
+    const { data: account } = await supabase
+      .from('Account')
+      .select('*')
+      .eq('userId', session.user.id)
+      .eq('provider', 'instagram')
+      .single();
 
     if (!account?.access_token) {
       return NextResponse.json(
@@ -27,30 +26,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Try to get fresh data from Instagram API
     const analytics = await getFullAnalytics(
       account.providerAccountId,
       account.access_token
     );
 
     if (!analytics) {
-      // Fall back to cached data if API fails
-      const cached = await getCachedAnalytics(session.user.id);
-      if (cached) {
-        return NextResponse.json(cached);
-      }
       return NextResponse.json(
         { error: 'Could not fetch Instagram data' },
         { status: 500 }
       );
     }
-
-    // Sync to database in the background
-    syncAccountToDatabase(
-      session.user.id,
-      account.providerAccountId,
-      account.access_token
-    ).catch(console.error);
 
     return NextResponse.json(analytics);
   } catch (error) {
@@ -70,12 +56,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const account = await prisma.account.findFirst({
-      where: {
-        userId: session.user.id,
-        provider: 'instagram',
-      },
-    });
+    const { data: account } = await supabase
+      .from('Account')
+      .select('*')
+      .eq('userId', session.user.id)
+      .eq('provider', 'instagram')
+      .single();
 
     if (!account?.access_token) {
       return NextResponse.json(
@@ -83,13 +69,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    // Force sync to database
-    await syncAccountToDatabase(
-      session.user.id,
-      account.providerAccountId,
-      account.access_token
-    );
 
     return NextResponse.json({ success: true, message: 'Data synced' });
   } catch (error) {

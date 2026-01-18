@@ -2,7 +2,7 @@ import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
 import bcrypt from 'bcryptjs';
-import prisma from './prisma';
+import { supabase } from './supabase';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -17,11 +17,13 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Username and password required');
         }
 
-        const user = await prisma.user.findUnique({
-          where: { username: credentials.username },
-        });
+        const { data: user, error } = await supabase
+          .from('User')
+          .select('*')
+          .eq('username', credentials.username)
+          .single();
 
-        if (!user) {
+        if (error || !user) {
           throw new Error('User not found');
         }
 

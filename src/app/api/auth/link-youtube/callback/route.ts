@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import prisma from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
+
+function generateId() {
+  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get('code');
   const error = searchParams.get('error');
 
-  // Get the stored user ID from cookie
   const cookieStore = await cookies();
   const userId = cookieStore.get('link_user_id')?.value;
-
-  // Clear the cookie
   cookieStore.delete('link_user_id');
 
   if (error) {
@@ -33,7 +34,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Exchange code for tokens
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: {
@@ -58,7 +58,6 @@ export async function GET(request: NextRequest) {
 
     const tokens = await tokenResponse.json();
 
-    // Get user info from Google
     const userInfoResponse = await fetch(
       'https://www.googleapis.com/oauth2/v2/userinfo',
       {
@@ -77,12 +76,12 @@ export async function GET(request: NextRequest) {
     const userInfo = await userInfoResponse.json();
 
     // Check if this Google account is already linked to another user
-    const existingAccount = await prisma.account.findFirst({
-      where: {
-        provider: 'google',
-        providerAccountId: userInfo.id,
-      },
-    });
+    const { data: existingAccount } = await supabase
+      .from('Account')
+      .select('*')
+      .eq('provider', 'google')
+      .eq('providerAccountId', userInfo.id)
+      .single();
 
     if (existingAccount && existingAccount.userId !== userId) {
       return NextResponse.redirect(
@@ -90,25 +89,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Upsert the account (create or update)
-    await prisma.account.upsert({
-      where: {
-        provider_providerAccountId: {
-          provider: 'google',
-          providerAccountId: userInfo.id,
-        },
-      },
-      update: {
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token || undefined,
-        expires_at: tokens.expires_in
-          ? Math.floor(Date.now() / 1000) + tokens.expires_in
-          : undefined,
-        token_type: tokens.token_type,
-        scope: tokens.scope,
-        id_token: tokens.id_token,
-      },
-      create: {
+    if (existingAccount) {
+      // Update existing account
+      await supabase
+        .from('Account')
+        .update({
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token || null,
+          expires_at: tokens.expires_in
+            ? Math.floor(Date.now() / 1000) + tokens.expires_in
+            : null,
+          token_type: tokens.token_type,
+          scope: tokens.scope,
+          id_token: tokens.id_token,
+        })
+        .eq('id', existingAccount.id);
+    } else {
+      // Create new account
+      await supabase.from('Account').insert({
+        id: generateId(),
         userId,
         type: 'oauth',
         provider: 'google',
@@ -117,21 +116,21 @@ export async function GET(request: NextRequest) {
         refresh_token: tokens.refresh_token,
         expires_at: tokens.expires_in
           ? Math.floor(Date.now() / 1000) + tokens.expires_in
-          : undefined,
+          : null,
         token_type: tokens.token_type,
         scope: tokens.scope,
         id_token: tokens.id_token,
-      },
-    });
+      });
+    }
 
     // Update user email if not set
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
+    await supabase
+      .from('User')
+      .update({
         email: userInfo.email,
         image: userInfo.picture,
-      },
-    });
+      })
+      .eq('id', userId);
 
     return NextResponse.redirect(
       `${process.env.NEXTAUTH_URL}/dashboard?youtube=connected`

@@ -1,5 +1,4 @@
 import { google } from 'googleapis';
-import prisma from './prisma';
 import { YouTubeChannelData, YouTubeVideoData, YouTubeAnalytics } from '@/types';
 
 export async function getYouTubeClient(accessToken: string) {
@@ -52,7 +51,6 @@ export async function getChannelVideos(
   try {
     const youtube = await getYouTubeClient(accessToken);
 
-    // First get the uploads playlist ID
     const channelResponse = await youtube.channels.list({
       part: ['contentDetails'],
       mine: true,
@@ -63,7 +61,6 @@ export async function getChannelVideos(
 
     if (!uploadsPlaylistId) return [];
 
-    // Get videos from the uploads playlist
     const playlistResponse = await youtube.playlistItems.list({
       part: ['snippet', 'contentDetails'],
       playlistId: uploadsPlaylistId,
@@ -76,7 +73,6 @@ export async function getChannelVideos(
 
     if (!videoIds.length) return [];
 
-    // Get detailed video statistics
     const videosResponse = await youtube.videos.list({
       part: ['snippet', 'statistics', 'contentDetails'],
       id: videoIds,
@@ -108,7 +104,6 @@ export async function getFullAnalytics(accessToken: string): Promise<YouTubeAnal
 
     const videos = await getChannelVideos(accessToken, 50);
 
-    // Calculate recent performance (last 10 videos)
     const recentVideos = videos.slice(0, 10);
     const recentPerformance = {
       totalViews: recentVideos.reduce((sum, v) => sum + v.viewCount, 0),
@@ -119,7 +114,6 @@ export async function getFullAnalytics(accessToken: string): Promise<YouTubeAnal
         : 0,
     };
 
-    // Get top performing videos by views
     const topVideos = [...videos].sort((a, b) => b.viewCount - a.viewCount).slice(0, 5);
 
     return {
@@ -131,70 +125,5 @@ export async function getFullAnalytics(accessToken: string): Promise<YouTubeAnal
   } catch (error) {
     console.error('Error fetching analytics:', error);
     throw error;
-  }
-}
-
-export async function syncChannelToDatabase(
-  userId: string,
-  accessToken: string
-): Promise<void> {
-  const analytics = await getFullAnalytics(accessToken);
-  if (!analytics) return;
-
-  const { channel, videos } = analytics;
-
-  // Upsert channel
-  const dbChannel = await prisma.youTubeChannel.upsert({
-    where: { channelId: channel.id },
-    update: {
-      title: channel.title,
-      description: channel.description,
-      customUrl: channel.customUrl,
-      thumbnailUrl: channel.thumbnailUrl,
-      subscriberCount: channel.subscriberCount,
-      videoCount: channel.videoCount,
-      viewCount: BigInt(channel.viewCount),
-      lastSyncedAt: new Date(),
-    },
-    create: {
-      channelId: channel.id,
-      title: channel.title,
-      description: channel.description,
-      customUrl: channel.customUrl,
-      publishedAt: channel.publishedAt ? new Date(channel.publishedAt) : null,
-      thumbnailUrl: channel.thumbnailUrl,
-      subscriberCount: channel.subscriberCount,
-      videoCount: channel.videoCount,
-      viewCount: BigInt(channel.viewCount),
-      userId,
-    },
-  });
-
-  // Upsert videos
-  for (const video of videos) {
-    await prisma.youTubeVideo.upsert({
-      where: { videoId: video.id },
-      update: {
-        title: video.title,
-        description: video.description,
-        thumbnailUrl: video.thumbnailUrl,
-        duration: video.duration,
-        viewCount: BigInt(video.viewCount),
-        likeCount: video.likeCount,
-        commentCount: video.commentCount,
-      },
-      create: {
-        videoId: video.id,
-        title: video.title,
-        description: video.description,
-        publishedAt: video.publishedAt ? new Date(video.publishedAt) : null,
-        thumbnailUrl: video.thumbnailUrl,
-        duration: video.duration,
-        viewCount: BigInt(video.viewCount),
-        likeCount: video.likeCount,
-        commentCount: video.commentCount,
-        channelId: dbChannel.id,
-      },
-    });
   }
 }

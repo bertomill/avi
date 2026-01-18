@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import prisma from '@/lib/prisma';
-import { getInstagramAccountId, syncAccountToDatabase } from '@/lib/instagram';
+import { supabase } from '@/lib/supabase';
+import { getInstagramAccountId } from '@/lib/instagram';
+
+function generateId() {
+  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get('code');
   const error = searchParams.get('error');
 
-  // Get the stored user ID from cookie
   const cookieStore = await cookies();
   const userId = cookieStore.get('link_instagram_user_id')?.value;
-
-  // Clear the cookie
   cookieStore.delete('link_instagram_user_id');
 
   if (error) {
@@ -34,7 +35,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Exchange code for access token
     const tokenResponse = await fetch(
       'https://graph.facebook.com/v19.0/oauth/access_token',
       {
@@ -63,7 +63,6 @@ export async function GET(request: NextRequest) {
     const tokens = await tokenResponse.json();
     const accessToken = tokens.access_token;
 
-    // Get Instagram Business Account ID
     const instagramAccountId = await getInstagramAccountId(accessToken);
 
     if (!instagramAccountId) {
@@ -73,12 +72,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if this Instagram account is already linked to another user
-    const existingAccount = await prisma.account.findFirst({
-      where: {
-        provider: 'instagram',
-        providerAccountId: instagramAccountId,
-      },
-    });
+    const { data: existingAccount } = await supabase
+      .from('Account')
+      .select('*')
+      .eq('provider', 'instagram')
+      .eq('providerAccountId', instagramAccountId)
+      .single();
 
     if (existingAccount && existingAccount.userId !== userId) {
       return NextResponse.redirect(
@@ -86,22 +85,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Upsert the account (create or update) in NextAuth Account table
-    await prisma.account.upsert({
-      where: {
-        provider_providerAccountId: {
-          provider: 'instagram',
-          providerAccountId: instagramAccountId,
-        },
-      },
-      update: {
-        access_token: accessToken,
-        expires_at: tokens.expires_in
-          ? Math.floor(Date.now() / 1000) + tokens.expires_in
-          : undefined,
-        token_type: tokens.token_type || 'bearer',
-      },
-      create: {
+    if (existingAccount) {
+      // Update existing account
+      await supabase
+        .from('Account')
+        .update({
+          access_token: accessToken,
+          expires_at: tokens.expires_in
+            ? Math.floor(Date.now() / 1000) + tokens.expires_in
+            : null,
+          token_type: tokens.token_type || 'bearer',
+        })
+        .eq('id', existingAccount.id);
+    } else {
+      // Create new account
+      await supabase.from('Account').insert({
+        id: generateId(),
         userId,
         type: 'oauth',
         provider: 'instagram',
@@ -109,13 +108,10 @@ export async function GET(request: NextRequest) {
         access_token: accessToken,
         expires_at: tokens.expires_in
           ? Math.floor(Date.now() / 1000) + tokens.expires_in
-          : undefined,
+          : null,
         token_type: tokens.token_type || 'bearer',
-      },
-    });
-
-    // Sync Instagram account data to our database
-    await syncAccountToDatabase(userId, instagramAccountId, accessToken);
+      });
+    }
 
     return NextResponse.redirect(
       `${process.env.NEXTAUTH_URL}/dashboard?instagram=connected`

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { getFullAnalytics, syncChannelToDatabase } from '@/lib/youtube';
-import prisma from '@/lib/prisma';
+import { getFullAnalytics } from '@/lib/youtube';
+import { supabase } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,13 +12,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get the user's Google account access token
-    const account = await prisma.account.findFirst({
-      where: {
-        userId: session.user.id,
-        provider: 'google',
-      },
-    });
+    const { data: account } = await supabase
+      .from('Account')
+      .select('*')
+      .eq('userId', session.user.id)
+      .eq('provider', 'google')
+      .single();
 
     if (!account?.access_token) {
       return NextResponse.json(
@@ -35,11 +34,6 @@ export async function GET(request: NextRequest) {
         { status: 500 }
       );
     }
-
-    // Sync to database in the background
-    syncChannelToDatabase(session.user.id, account.access_token).catch(
-      console.error
-    );
 
     return NextResponse.json(analytics);
   } catch (error) {
@@ -59,12 +53,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const account = await prisma.account.findFirst({
-      where: {
-        userId: session.user.id,
-        provider: 'google',
-      },
-    });
+    const { data: account } = await supabase
+      .from('Account')
+      .select('*')
+      .eq('userId', session.user.id)
+      .eq('provider', 'google')
+      .single();
 
     if (!account?.access_token) {
       return NextResponse.json(
@@ -72,9 +66,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    // Force sync to database
-    await syncChannelToDatabase(session.user.id, account.access_token);
 
     return NextResponse.json({ success: true, message: 'Data synced' });
   } catch (error) {
