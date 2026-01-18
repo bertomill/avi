@@ -1,0 +1,155 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// NextAuth.js required models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id               String    @id @default(cuid())
+  username         String    @unique
+  password         String
+  name             String?
+  email            String?   @unique
+  emailVerified    DateTime?
+  image            String?
+  accounts         Account[]
+  sessions         Session[]
+  channels         YouTubeChannel[]
+  instagramAccount InstagramAccount?
+  conversations    Conversation[]
+  createdAt        DateTime  @default(now())
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// YouTube specific models
+model YouTubeChannel {
+  id               String   @id @default(cuid())
+  channelId        String   @unique
+  title            String
+  description      String?
+  customUrl        String?
+  publishedAt      DateTime?
+  thumbnailUrl     String?
+  subscriberCount  Int?
+  videoCount       Int?
+  viewCount        BigInt?
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videos           YouTubeVideo[]
+  lastSyncedAt     DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model YouTubeVideo {
+  id              String   @id @default(cuid())
+  videoId         String   @unique
+  title           String
+  description     String?
+  publishedAt     DateTime?
+  thumbnailUrl    String?
+  duration        String?
+  viewCount       BigInt?
+  likeCount       Int?
+  commentCount    Int?
+  channelId       String
+  channel         YouTubeChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// AI Conversation storage
+model Conversation {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  role           String       // 'user' or 'assistant'
+  content        String
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+}
+
+// Instagram specific models
+model InstagramAccount {
+  id                String   @id @default(cuid())
+  accountId         String   @unique
+  username          String
+  name              String?
+  biography         String?
+  profilePictureUrl String?
+  followerCount     Int?
+  followingCount    Int?
+  mediaCount        Int?
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media             InstagramMedia[]
+  lastSyncedAt      DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model InstagramMedia {
+  id            String   @id @default(cuid())
+  mediaId       String   @unique
+  caption       String?
+  mediaType     String   // IMAGE, VIDEO, CAROUSEL_ALBUM
+  mediaUrl      String?
+  thumbnailUrl  String?
+  permalink     String?
+  timestamp     DateTime?
+  likeCount     Int?
+  commentsCount Int?
+  accountId     String
+  account       InstagramAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
