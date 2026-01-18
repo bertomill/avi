@@ -1,13 +1,14 @@
 # Avi - Social Media Content Dashboard: Engineering Handoff
 
-**Last Updated:** January 17, 2026
-**Status:** YouTube Integration Complete, Ready for Instagram
+**Last Updated:** January 18, 2026
+**Status:** YouTube Fully Working with Database Sync, Multi-Platform UI Ready
+**Production URL:** https://flowv.site
 
 ---
 
 ## Project Overview
 
-Avi is a Next.js application that connects to social media platforms for read-only analytics and integrates Claude AI for content ideation and editing assistance. The goal is to give content creators a dashboard to view engagement data and get AI-powered recommendations.
+Avi is a Next.js application that connects to social media platforms for read-only analytics and integrates Claude AI for content ideation and editing assistance. Content creators can view engagement data across platforms and get AI-powered recommendations based on their historical performance data stored in Supabase.
 
 ---
 
@@ -17,212 +18,210 @@ Avi is a Next.js application that connects to social media platforms for read-on
 - **Framework:** Next.js 16 with App Router + Turbopack
 - **Language:** TypeScript
 - **Styling:** Tailwind CSS
-- **Auth:** NextAuth.js (Credentials + Google OAuth for YouTube linking)
-- **Database:** SQLite with Prisma 6
+- **Auth:** NextAuth.js (Credentials-based login)
+- **Database:** Supabase PostgreSQL (moved from Prisma/SQLite)
 - **AI:** Anthropic Claude API (claude-sonnet-4-20250514)
+- **Hosting:** Vercel
 
 ### Project Structure
 ```
 avi/
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx                    # Landing page with hero + features
+│   │   ├── page.tsx                    # Landing page
 │   │   ├── layout.tsx                  # Root layout with SessionProvider
 │   │   ├── login/page.tsx              # Login page (username/password)
-│   │   ├── dashboard/page.tsx          # Main dashboard (analytics + AI tabs)
+│   │   ├── dashboard/page.tsx          # Main dashboard (multi-platform tabs)
 │   │   └── api/
 │   │       ├── auth/
 │   │       │   ├── [...nextauth]/route.ts    # NextAuth handler
-│   │       │   └── link-youtube/
-│   │       │       ├── route.ts              # Initiates Google OAuth for linking
-│   │       │       └── callback/route.ts     # Handles OAuth callback, saves tokens
-│   │       ├── signup/route.ts               # User registration endpoint
+│   │       │   ├── link-youtube/             # YouTube OAuth (legacy, kept for reference)
+│   │       │   ├── instagram/                # Instagram OAuth routes
+│   │       │   ├── link-tiktok/              # TikTok OAuth routes
+│   │       │   └── link-x/                   # X/Twitter OAuth routes
+│   │       ├── signup/route.ts               # User registration
 │   │       ├── youtube/
-│   │       │   ├── route.ts                  # GET: fetch analytics, POST: sync
-│   │       │   └── status/route.ts           # GET: check if YouTube is connected
-│   │       └── claude/route.ts               # POST: AI chat/ideas/analysis
+│   │       │   ├── route.ts                  # GET: fetch analytics, POST: sync to DB
+│   │       │   ├── status/route.ts           # GET: check if connected
+│   │       │   └── connect/route.ts          # POST: connect by username (no OAuth!)
+│   │       ├── instagram/
+│   │       │   ├── route.ts                  # Instagram analytics
+│   │       │   └── status/route.ts           # Connection status
+│   │       ├── tiktok/
+│   │       │   ├── route.ts                  # TikTok analytics
+│   │       │   └── status/route.ts           # Connection status
+│   │       ├── x/
+│   │       │   ├── route.ts                  # X/Twitter analytics
+│   │       │   └── status/route.ts           # Connection status
+│   │       ├── medium/
+│   │       │   ├── route.ts                  # Medium analytics
+│   │       │   ├── status/route.ts           # Connection status
+│   │       │   └── connect/route.ts          # Connect by username
+│   │       └── claude/route.ts               # AI chat (queries data from Supabase)
 │   ├── components/
-│   │   ├── ConnectButton.tsx           # Shows user info + "Connect YouTube" button
-│   │   ├── YouTubeAnalytics.tsx        # Full analytics dashboard component
-│   │   ├── ContentAssistant.tsx        # AI chat interface with quick actions
-│   │   └── Providers.tsx               # NextAuth SessionProvider wrapper
+│   │   ├── ConnectButton.tsx           # Multi-platform connection status
+│   │   ├── YouTubeAnalytics.tsx        # YouTube dashboard + username input
+│   │   ├── InstagramAnalytics.tsx      # Instagram dashboard
+│   │   ├── TikTokAnalytics.tsx         # TikTok dashboard
+│   │   ├── XAnalytics.tsx              # X/Twitter dashboard
+│   │   ├── MediumAnalytics.tsx         # Medium dashboard
+│   │   ├── ContentAssistant.tsx        # AI chat interface
+│   │   └── Providers.tsx               # NextAuth SessionProvider
 │   ├── lib/
-│   │   ├── auth.ts                     # NextAuth config (Credentials + Google provider)
-│   │   ├── youtube.ts                  # YouTube Data API v3 client
-│   │   ├── claude.ts                   # Claude API client with context builder
-│   │   └── prisma.ts                   # Prisma client singleton
+│   │   ├── supabase.ts                 # Supabase client
+│   │   ├── auth.ts                     # NextAuth config
+│   │   ├── youtube.ts                  # YouTube API (API key-based, no OAuth)
+│   │   ├── instagram.ts                # Instagram API client
+│   │   ├── tiktok.ts                   # TikTok API client
+│   │   ├── x.ts                        # X/Twitter API client
+│   │   ├── medium.ts                   # Medium RSS parser
+│   │   └── claude.ts                   # Claude AI with database context
 │   └── types/index.ts                  # TypeScript interfaces
-├── prisma/
-│   ├── schema.prisma                   # Database schema
-│   ├── migrations/                     # Migration files
-│   └── dev.db                          # SQLite database
-├── .env                                # Environment variables (has API keys)
-├── .env.local.example                  # Template for new developers
+├── supabase/
+│   └── migrations/                     # SQL migration files
+├── .env.local.example                  # Environment template
 └── package.json
 ```
 
-### Database Schema (Prisma)
-- **User** - User accounts (username, password hash, name, email)
-- **Account** - OAuth account links (stores Google access/refresh tokens)
-- **Session** - User sessions
-- **VerificationToken** - Email verification
-- **YouTubeChannel** - Cached channel data (subscribers, views, etc.)
-- **YouTubeVideo** - Cached video data (views, likes, comments, duration)
-- **Conversation** - AI chat history (for future use)
-- **Message** - Individual chat messages (for future use)
+---
+
+## Database Schema (Supabase)
+
+### Core Tables
+```sql
+-- User accounts
+"User" (id, username, password, name, email, image, youtubeChannelId, mediumUsername, createdAt)
+
+-- OAuth account links (for platforms requiring OAuth)
+"Account" (id, userId, type, provider, providerAccountId, access_token, refresh_token, expires_at, ...)
+
+-- YouTube data (synced from API)
+"YouTubeChannel" (id, userId, title, description, customUrl, thumbnailUrl, subscriberCount, videoCount, viewCount, lastSyncedAt)
+"YouTubeVideo" (id, channelId, title, description, thumbnailUrl, publishedAt, duration, viewCount, likeCount, commentCount, lastSyncedAt)
+```
+
+### Key Indexes
+```sql
+CREATE INDEX "idx_youtube_channel_user" ON "YouTubeChannel"("userId");
+CREATE INDEX "idx_youtube_video_channel" ON "YouTubeVideo"("channelId");
+CREATE INDEX "idx_youtube_video_views" ON "YouTubeVideo"("viewCount" DESC);
+```
+
+---
+
+## YouTube Integration (WORKING)
+
+### How It Works (No OAuth Required!)
+1. User enters `@username` or channel URL in dashboard
+2. App uses YouTube Data API v3 with API key to look up channel
+3. Channel ID stored in `User.youtubeChannelId`
+4. All video data synced to `YouTubeChannel` and `YouTubeVideo` tables
+5. AI agent queries data directly from Supabase
+
+### Key Files
+- `src/app/api/youtube/connect/route.ts` - Connects channel by username
+- `src/app/api/youtube/route.ts` - Fetches analytics & syncs to DB
+- `src/lib/youtube.ts` - API client with `getFullAnalyticsByChannelId()`
+- `src/components/YouTubeAnalytics.tsx` - UI with username input form
+
+### Environment Variables
+```env
+YOUTUBE_API_KEY=AIzaSy...  # YouTube Data API v3 key (not OAuth!)
+```
+
+---
+
+## AI Agent Integration
+
+### How It Works
+1. Claude API queries YouTube data from Supabase (not live API)
+2. Builds context with: channel stats, top videos, recent content
+3. AI can analyze historical trends and make recommendations
+
+### Key File: `src/app/api/claude/route.ts`
+```typescript
+// Queries database for AI context
+async function buildAIContextFromDatabase(userId: string): Promise<AIContext> {
+  const { data: channel } = await supabase
+    .from('YouTubeChannel')
+    .select('*')
+    .eq('userId', userId)
+    .single();
+
+  const { data: topVideos } = await supabase
+    .from('YouTubeVideo')
+    .select('*')
+    .eq('channelId', channel.id)
+    .order('viewCount', { ascending: false })
+    .limit(5);
+  // ... builds context for Claude
+}
+```
 
 ---
 
 ## Authentication Flow
 
-The app uses a **two-step authentication model**:
+1. **Signup/Login:** Username + password (NextAuth CredentialsProvider)
+2. **Connect Platforms:**
+   - YouTube: Just enter @username (no OAuth!)
+   - Others: OAuth flows (Instagram, TikTok, X)
 
-1. **Login/Signup:** Users create account with username/password (credentials provider)
-2. **Link YouTube:** After logging in, users click "Connect YouTube" to OAuth with Google
-
-This allows users to have a single Avi account and link multiple social platforms to it.
-
-### Key Auth Files
-- `src/lib/auth.ts` - NextAuth config with CredentialsProvider + GoogleProvider
-- `src/app/api/signup/route.ts` - Creates new user with hashed password
-- `src/app/api/auth/link-youtube/route.ts` - Redirects to Google OAuth
-- `src/app/api/auth/link-youtube/callback/route.ts` - Exchanges code for tokens, links to user
-
-### Google OAuth Redirect URI
-```
-http://localhost:3000/api/auth/link-youtube/callback
-```
-This must be added in Google Cloud Console under OAuth 2.0 Client > Authorized redirect URIs.
-
----
-
-## Features Implemented
-
-### 1. Landing Page (`/`)
-- Hero section with gradient background
-- "Get Started" button → login page
-- Feature highlights (Analytics, AI Ideas, Growth Strategy)
-- Auto-redirects to dashboard if authenticated
-
-### 2. Login Page (`/login`)
-- Username/password login form
-- Link to signup
-- Creates session via NextAuth credentials provider
-
-### 3. Dashboard (`/dashboard`)
-- Two tabs: YouTube Analytics and AI Assistant
-- Protected route (redirects to `/` if not authenticated)
-- Header shows "Connect YouTube" button if not linked, or "YouTube Connected" badge if linked
-
-### 4. YouTube Analytics Tab
-- Shows "Connect YouTube" prompt if not linked
-- Once connected:
-  - Channel header with profile image, title, subscriber count
-  - Stats grid (subscribers, total views, video count)
-  - Recent performance (last 10 videos aggregated)
-  - Top 5 performing videos with engagement rates
-  - Full video table with all videos
-  - Refresh/sync button
-
-### 5. AI Assistant Tab
-- Chat interface with Claude
-- Quick action buttons:
-  - Content Ideas (generates 5 video ideas)
-  - Analyze Gaps (identifies content opportunities)
-  - Title Help (optimizes titles)
-  - Strategy Review (overall recommendations)
-- **Context-aware:** AI receives channel stats, top videos, recent content in system prompt
-- Works even without YouTube connected (empty context)
-
-### 6. API Routes
-- `POST /api/signup` - Create new user account
-- `GET /api/youtube/status` - Check if YouTube is connected
-- `GET /api/youtube` - Fetch fresh analytics from YouTube API
-- `POST /api/youtube` - Force sync data to database
-- `POST /api/claude` - Chat with AI (actions: chat, ideas, optimize-title, analyze-gaps)
+### Key Files
+- `src/lib/auth.ts` - NextAuth config
+- `src/app/api/signup/route.ts` - User registration with bcrypt
 
 ---
 
 ## Current Status
 
-### Working (Tested & Verified)
-- User signup with username/password
-- User login with credentials
-- YouTube account linking via OAuth
-- YouTube analytics display (channel stats, videos, engagement)
-- AI assistant with YouTube context
-- All quick actions (Content Ideas, Analyze Gaps, etc.)
+### ✅ Fully Working
+- User signup/login with credentials
+- YouTube connection via username (no OAuth)
+- YouTube analytics display
+- YouTube data synced to Supabase
+- AI assistant queries data from database
+- Production deployment on Vercel (flowv.site)
+- Works with ngrok for local testing
 
-### Test Account
-- Username: `berto`
-- YouTube Channel: Berto Mill (@bertovmill)
-- Stats: 165 subscribers, 21.4K views, 56 videos
+### 🔲 UI Ready, Needs Backend
+- Instagram (OAuth flow stubbed)
+- TikTok (OAuth flow stubbed)
+- X/Twitter (OAuth flow stubbed)
+- Medium (RSS-based, partially working)
 
 ---
 
 ## Environment Variables
 
-All keys are in `.env` file:
-
 ```env
-# Database
-DATABASE_URL="file:./dev.db"
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
 
 # NextAuth
-NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_URL=https://flowv.site  # or http://localhost:3000
 NEXTAUTH_SECRET=<generated>
 
-# Google OAuth (for YouTube)
-GOOGLE_CLIENT_ID=<configured>
-GOOGLE_CLIENT_SECRET=<configured>
+# YouTube (API Key - NOT OAuth)
+YOUTUBE_API_KEY=AIzaSy...
 
 # Anthropic
-ANTHROPIC_API_KEY=<configured>
+ANTHROPIC_API_KEY=sk-ant-...
 
-# Other APIs (not yet integrated)
-ELEVENLABS_API_KEY=<configured>
-INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET
-X_CLIENT_ID / X_CLIENT_SECRET / X_BEARER_TOKEN
-TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET
-SUPABASE keys
+# Google OAuth (optional, kept for reference)
+GOOGLE_CLIENT_ID=<optional>
+GOOGLE_CLIENT_SECRET=<optional>
+
+# Other platforms (for future)
+INSTAGRAM_APP_ID=...
+INSTAGRAM_APP_SECRET=...
+TIKTOK_CLIENT_KEY=...
+TIKTOK_CLIENT_SECRET=...
+X_CLIENT_ID=...
+X_CLIENT_SECRET=...
 ```
-
----
-
-## What's Next
-
-### Phase 1: Instagram Integration (NEXT UP)
-Instagram requires:
-- Facebook App in Meta Developer Console
-- Instagram Business or Creator account
-- Facebook Page linked to Instagram account
-
-Implementation tasks:
-- [ ] Add Instagram OAuth flow (Meta/Facebook login)
-- [ ] Create `/api/auth/link-instagram` routes
-- [ ] Create `/api/instagram` routes for fetching insights
-- [ ] Create `InstagramAnalytics.tsx` component
-- [ ] Add Instagram tab to dashboard
-- [ ] Pass Instagram data to AI context
-
-### Phase 2: Enhance AI Features
-- [ ] Save conversation history to database
-- [ ] Stream AI responses for better UX
-- [ ] Add markdown rendering in chat
-- [ ] Cross-platform content recommendations
-
-### Phase 3: Additional Platforms
-- [ ] X/Twitter (Twitter API v2)
-- [ ] TikTok (TikTok API)
-- [ ] Platform selector/switcher in dashboard
-- [ ] Unified analytics view across platforms
-
-### Phase 4: Advanced Features
-- [ ] Content calendar / scheduling
-- [ ] A/B title testing suggestions
-- [ ] Competitor analysis
-- [ ] Trend detection
-- [ ] Export reports
 
 ---
 
@@ -232,39 +231,98 @@ Implementation tasks:
 # Install dependencies
 npm install
 
-# Run database migrations (if needed)
-npx prisma migrate dev
-
 # Start development server
 npm run dev
 
 # Open http://localhost:3000
+
+# For external testing (ngrok)
+ngrok http 3000
+```
+
+### Database Setup (Supabase)
+Run these SQL commands in Supabase SQL Editor:
+
+```sql
+-- Add youtubeChannelId to User table
+ALTER TABLE "User" ADD COLUMN "youtubeChannelId" TEXT;
+
+-- Create YouTube tables
+CREATE TABLE "YouTubeChannel" (
+  "id" TEXT PRIMARY KEY,
+  "userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+  "title" TEXT NOT NULL,
+  "description" TEXT,
+  "customUrl" TEXT,
+  "thumbnailUrl" TEXT,
+  "subscriberCount" BIGINT DEFAULT 0,
+  "videoCount" INTEGER DEFAULT 0,
+  "viewCount" BIGINT DEFAULT 0,
+  "publishedAt" TIMESTAMP WITH TIME ZONE,
+  "lastSyncedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE "YouTubeVideo" (
+  "id" TEXT PRIMARY KEY,
+  "channelId" TEXT NOT NULL REFERENCES "YouTubeChannel"("id") ON DELETE CASCADE,
+  "title" TEXT NOT NULL,
+  "description" TEXT,
+  "thumbnailUrl" TEXT,
+  "publishedAt" TIMESTAMP WITH TIME ZONE,
+  "duration" TEXT,
+  "viewCount" BIGINT DEFAULT 0,
+  "likeCount" BIGINT DEFAULT 0,
+  "commentCount" BIGINT DEFAULT 0,
+  "lastSyncedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 ```
 
 ---
 
-## Key Files to Know
+## Key Files Reference
 
 | File | Purpose |
 |------|---------|
-| `src/lib/auth.ts` | NextAuth config, Credentials + Google providers |
-| `src/lib/youtube.ts` | YouTube API calls (channel, videos, analytics) |
-| `src/lib/claude.ts` | Claude system prompt builder with channel context |
-| `src/app/api/auth/link-youtube/` | YouTube OAuth linking flow |
-| `src/components/YouTubeAnalytics.tsx` | Main analytics dashboard UI |
-| `src/components/ContentAssistant.tsx` | AI chat interface |
-| `src/components/ConnectButton.tsx` | Connect YouTube / user status |
-| `prisma/schema.prisma` | Database models |
+| `src/lib/supabase.ts` | Supabase client |
+| `src/lib/youtube.ts` | YouTube API (API key, extracts channel from URL) |
+| `src/lib/claude.ts` | Claude AI with system prompt |
+| `src/app/api/youtube/connect/route.ts` | Connect YouTube by username |
+| `src/app/api/youtube/route.ts` | Fetch & sync YouTube data |
+| `src/app/api/claude/route.ts` | AI chat (queries Supabase) |
+| `src/components/YouTubeAnalytics.tsx` | YouTube dashboard UI |
+| `src/components/ContentAssistant.tsx` | AI chat UI |
 
 ---
 
-## Known Issues
+## What's Next
 
-1. **Token Refresh:** The current implementation doesn't handle OAuth token refresh. If tokens expire (1 hour for Google), users will need to re-link their YouTube account.
+### Phase 1: Instagram Integration
+- [ ] Set up Meta Developer App
+- [ ] Implement Instagram OAuth flow
+- [ ] Fetch Instagram insights
+- [ ] Save to Supabase tables
+- [ ] Add to AI context
 
-2. **BigInt Serialization:** YouTube view counts use BigInt in the database. May need JSON serialization handling if returning raw Prisma objects.
+### Phase 2: Additional Platforms
+- [ ] TikTok API integration
+- [ ] X/Twitter API integration
+- [ ] Unified cross-platform analytics
 
-3. **Prisma Version:** Using Prisma 6 (not 7) because Prisma 7 requires adapter configuration that was causing build issues.
+### Phase 3: Advanced AI Features
+- [ ] Video editing suggestions
+- [ ] Content calendar recommendations
+- [ ] Trend analysis from historical data
+- [ ] Automated content ideas based on performance
+
+---
+
+## Test Account
+
+- **Username:** `berto`
+- **YouTube Channel:** @bertovmill (Berto Mill)
+- **Production:** https://flowv.site
 
 ---
 
