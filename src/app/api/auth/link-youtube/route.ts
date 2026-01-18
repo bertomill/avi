@@ -21,8 +21,9 @@ export async function GET() {
   });
 
   // Build Google OAuth URL
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri = `${process.env.NEXTAUTH_URL}/api/auth/link-youtube/callback`;
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const baseUrl = process.env.NEXTAUTH_URL?.trim();
+  const redirectUri = `${baseUrl}/api/auth/link-youtube/callback`;
   const scope = encodeURIComponent(
     'openid email profile https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly'
   );
