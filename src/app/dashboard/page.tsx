@@ -6,9 +6,12 @@ import { useEffect, useState } from 'react';
 import ConnectButton from '@/components/ConnectButton';
 import YouTubeAnalytics from '@/components/YouTubeAnalytics';
 import InstagramAnalytics from '@/components/InstagramAnalytics';
+import XAnalytics from '@/components/XAnalytics';
+import TikTokAnalytics from '@/components/TikTokAnalytics';
+import MediumAnalytics from '@/components/MediumAnalytics';
 import ContentAssistant from '@/components/ContentAssistant';
 
-type Tab = 'youtube' | 'instagram' | 'assistant';
+type Tab = 'youtube' | 'instagram' | 'x' | 'tiktok' | 'medium' | 'assistant';
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
@@ -87,6 +90,51 @@ export default function Dashboard() {
               </div>
             </button>
             <button
+              onClick={() => setActiveTab('x')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'x'
+                  ? 'border-black text-black'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+                X
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('tiktok')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'tiktok'
+                  ? 'border-gray-900 text-gray-900'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z"/>
+                </svg>
+                TikTok
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('medium')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'medium'
+                  ? 'border-green-600 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13.54 12a6.8 6.8 0 01-6.77 6.82A6.8 6.8 0 010 12a6.8 6.8 0 016.77-6.82A6.8 6.8 0 0113.54 12zM20.96 12c0 3.54-1.51 6.42-3.38 6.42-1.87 0-3.39-2.88-3.39-6.42s1.52-6.42 3.39-6.42 3.38 2.88 3.38 6.42M24 12c0 3.17-.53 5.75-1.19 5.75-.66 0-1.19-2.58-1.19-5.75s.53-5.75 1.19-5.75C23.47 6.25 24 8.83 24 12z"/>
+                </svg>
+                Medium
+              </div>
+            </button>
+            <button
               onClick={() => setActiveTab('assistant')}
               className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === 'assistant'
@@ -109,6 +157,9 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {activeTab === 'youtube' && <YouTubeAnalytics />}
         {activeTab === 'instagram' && <InstagramAnalytics />}
+        {activeTab === 'x' && <XAnalytics />}
+        {activeTab === 'tiktok' && <TikTokAnalytics />}
+        {activeTab === 'medium' && <MediumAnalytics />}
         {activeTab === 'assistant' && (
           <div className="grid lg:grid-cols-2 gap-6">
             <div className="lg:col-span-2">

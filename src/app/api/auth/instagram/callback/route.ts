@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
           code,
           client_id: process.env.INSTAGRAM_APP_ID || '',
           client_secret: process.env.INSTAGRAM_APP_SECRET || '',
-          redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/link-instagram/callback`,
+          redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/instagram/callback`,
           grant_type: 'authorization_code',
         }),
       }

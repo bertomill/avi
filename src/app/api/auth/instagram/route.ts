@@ -22,7 +22,7 @@ export async function GET() {
 
   // Build Facebook OAuth URL for Instagram
   const clientId = process.env.INSTAGRAM_APP_ID;
-  const redirectUri = `${process.env.NEXTAUTH_URL}/api/auth/link-instagram/callback`;
+  const redirectUri = `${process.env.NEXTAUTH_URL}/api/auth/instagram/callback`;
 
   // Scopes needed for Instagram Business Account access
   // - instagram_basic: Basic profile info

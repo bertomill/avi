@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { getFullAnalytics } from '@/lib/youtube';
+import { getFullAnalyticsByChannelId } from '@/lib/youtube';
 import { supabase } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
@@ -12,21 +12,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: account } = await supabase
-      .from('Account')
-      .select('*')
-      .eq('userId', session.user.id)
-      .eq('provider', 'google')
+    // Get user's YouTube channel ID
+    const { data: user } = await supabase
+      .from('User')
+      .select('youtubeChannelId')
+      .eq('id', session.user.id)
       .single();
 
-    if (!account?.access_token) {
+    if (!user?.youtubeChannelId) {
       return NextResponse.json(
-        { error: 'No YouTube account connected' },
+        { error: 'No YouTube channel connected' },
         { status: 400 }
       );
     }
 
-    const analytics = await getFullAnalytics(account.access_token);
+    const analytics = await getFullAnalyticsByChannelId(user.youtubeChannelId);
 
     if (!analytics) {
       return NextResponse.json(
@@ -53,21 +53,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: account } = await supabase
-      .from('Account')
-      .select('*')
-      .eq('userId', session.user.id)
-      .eq('provider', 'google')
+    // Get user's YouTube channel ID
+    const { data: user } = await supabase
+      .from('User')
+      .select('youtubeChannelId')
+      .eq('id', session.user.id)
       .single();
 
-    if (!account?.access_token) {
+    if (!user?.youtubeChannelId) {
       return NextResponse.json(
-        { error: 'No YouTube account connected' },
+        { error: 'No YouTube channel connected' },
         { status: 400 }
       );
     }
 
-    return NextResponse.json({ success: true, message: 'Data synced' });
+    // Re-fetch analytics (acts as a refresh)
+    const analytics = await getFullAnalyticsByChannelId(user.youtubeChannelId);
+
+    return NextResponse.json({ success: true, message: 'Data refreshed', analytics });
   } catch (error) {
     console.error('YouTube sync error:', error);
     return NextResponse.json(

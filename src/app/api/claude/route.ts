@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { chatWithClaude, generateContentIdeas, optimizeTitle, analyzeContentGaps } from '@/lib/claude';
 import { getFullAnalytics } from '@/lib/youtube';
+import { getMediumAnalytics } from '@/lib/medium';
 import { AIContext, ChatMessage } from '@/types';
 import { supabase } from '@/lib/supabase';
 
@@ -68,6 +69,28 @@ export async function POST(request: NextRequest) {
         topPerformingVideos: [],
         recentContent: [],
       };
+    }
+
+    // Get Medium data if connected
+    const { data: user } = await supabase
+      .from('User')
+      .select('mediumUsername')
+      .eq('id', session.user.id)
+      .single();
+
+    if (user?.mediumUsername) {
+      const mediumAnalytics = await getMediumAnalytics(user.mediumUsername);
+      if (mediumAnalytics) {
+        context.mediumStats = {
+          username: mediumAnalytics.username,
+          totalArticles: mediumAnalytics.articles.length,
+        };
+        context.recentArticles = mediumAnalytics.articles.slice(0, 10).map(a => ({
+          title: a.title,
+          publishedAt: new Date(a.publishedAt).toLocaleDateString(),
+          categories: a.categories,
+        }));
+      }
     }
 
     let response: string;

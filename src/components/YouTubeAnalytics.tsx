@@ -32,6 +32,9 @@ export default function YouTubeAnalytics() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [channelInput, setChannelInput] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
 
   const fetchAnalytics = async () => {
     try {
@@ -67,6 +70,36 @@ export default function YouTubeAnalytics() {
     fetchAnalytics();
   }, []);
 
+  const connectChannel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!channelInput.trim() || connecting) return;
+
+    setConnecting(true);
+    setConnectError(null);
+
+    try {
+      const response = await fetch('/api/youtube/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelInput: channelInput.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to connect channel');
+      }
+
+      // Successfully connected - fetch analytics
+      setChannelInput('');
+      await fetchAnalytics();
+    } catch (err) {
+      setConnectError(err instanceof Error ? err.message : 'Failed to connect channel');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="bg-white rounded-xl p-6 shadow-sm">
@@ -84,7 +117,7 @@ export default function YouTubeAnalytics() {
   }
 
   if (error) {
-    const isNotConnected = error.includes('No YouTube account connected');
+    const isNotConnected = error.includes('No YouTube channel connected');
 
     return (
       <div className="bg-white rounded-xl p-6 shadow-sm">
@@ -98,17 +131,43 @@ export default function YouTubeAnalytics() {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Connect Your YouTube Channel</h3>
               <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                Link your YouTube account to see your channel analytics, video performance, and get AI-powered content suggestions.
+                Enter your YouTube channel URL or username to see your analytics, video performance, and get AI-powered content suggestions.
               </p>
-              <a
-                href="/api/auth/link-youtube"
-                className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-              >
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                </svg>
-                Connect YouTube Account
-              </a>
+              <form onSubmit={connectChannel} className="max-w-md mx-auto">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={channelInput}
+                    onChange={(e) => setChannelInput(e.target.value)}
+                    placeholder="@username or channel URL"
+                    className="flex-1 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    disabled={connecting}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!channelInput.trim() || connecting}
+                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {connecting ? (
+                      <>
+                        <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Connecting...
+                      </>
+                    ) : (
+                      'Connect'
+                    )}
+                  </button>
+                </div>
+                {connectError && (
+                  <p className="text-red-600 text-sm mt-2">{connectError}</p>
+                )}
+                <p className="text-gray-400 text-sm mt-3">
+                  Examples: @mkbhd, https://youtube.com/@mkbhd, or channel URL
+                </p>
+              </form>
             </>
           ) : (
             <>

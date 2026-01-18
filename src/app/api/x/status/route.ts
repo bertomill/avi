@@ -10,15 +10,17 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Check if user has a YouTube channel ID stored
-  const { data: user } = await supabase
-    .from('User')
-    .select('youtubeChannelId')
-    .eq('id', session.user.id)
+  const { data: account } = await supabase
+    .from('Account')
+    .select('id, expires_at')
+    .eq('userId', session.user.id)
+    .eq('provider', 'x')
     .single();
 
   return NextResponse.json({
-    connected: !!user?.youtubeChannelId,
-    channelId: user?.youtubeChannelId || null,
+    connected: !!account,
+    expired: account?.expires_at
+      ? account.expires_at < Math.floor(Date.now() / 1000)
+      : false,
   });
 }

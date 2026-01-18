@@ -36,8 +36,17 @@ export function buildSystemPrompt(context: AIContext): string {
     )
     .join('\n');
 
+  // Medium data
+  const recentArticlesInfo = context.recentArticles
+    ?.map(
+      (a, i) =>
+        `${i + 1}. "${a.title}" (${a.publishedAt}) - Topics: ${a.categories.length > 0 ? a.categories.join(', ') : 'none'}`
+    )
+    .join('\n');
+
   const hasYouTube = context.channelStats && context.channelStats.subscribers > 0;
   const hasInstagram = context.instagramStats && context.instagramStats.followers > 0;
+  const hasMedium = context.mediumStats && context.mediumStats.totalArticles > 0;
 
   let prompt = `You are an expert content strategist and AI assistant helping a creator optimize their social media presence. You have access to their analytics and should provide personalized, data-driven recommendations.
 
@@ -80,6 +89,18 @@ ${recentPostsInfo || 'No recent post data available.'}
 `;
   }
 
+  // Medium section
+  if (hasMedium) {
+    prompt += `## Medium Blog Overview
+- Username: @${context.mediumStats!.username}
+- Total Articles: ${context.mediumStats!.totalArticles}
+
+## Recent Medium Articles
+${recentArticlesInfo || 'No article data available yet.'}
+
+`;
+  }
+
   prompt += `## Your Capabilities
 You can help with:
 1. **Content Ideation**: Suggest content ideas based on what's performing well
@@ -92,6 +113,8 @@ You can help with:
 8. **Content Strategy**: Analyze gaps and opportunities across platforms
 9. **Trend Analysis**: Identify patterns in successful content
 10. **Posting Strategy**: Recommend optimal posting frequency and timing
+11. **Blog Writing**: Help write or improve Medium articles
+12. **Content Repurposing**: Suggest ways to turn blog posts into videos or social content
 
 Always base your recommendations on the creator's actual data and performance patterns. Be specific, actionable, and encouraging while maintaining honesty about what's working and what could improve.`;
 

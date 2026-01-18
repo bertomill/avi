@@ -103,7 +103,7 @@ export default function InstagramAnalytics() {
                 Link your Instagram Business account to see your analytics, post performance, and get AI-powered content suggestions.
               </p>
               <a
-                href="/api/auth/link-instagram"
+                href="/api/auth/instagram"
                 className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 hover:from-purple-600 hover:via-pink-600 hover:to-orange-500 text-white px-6 py-3 rounded-lg font-medium transition-all"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
