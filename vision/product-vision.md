@@ -3,6 +3,9 @@
 ## Current State
 Avi is connected to all social channels (YouTube, Instagram, TikTok, X, Medium) and provides analytics tracking with an AI-powered content assistant.
 
+## Technology Approach
+All future agents will be built using the **Claude Agents SDK** from Anthropic. This enables us to create autonomous, multi-step AI agents that can reason, use tools, and take actions on behalf of content creators.
+
 ## Future Agents & Tools
 
 ### 1. Content Ideas Agent
