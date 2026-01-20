@@ -3,7 +3,9 @@
 ## Overview
 Avi uses a multi-agent system where specialized agents collaborate to help content creators produce better content.
 
-## The Three Agents
+## The Vidneers
+
+The three agents are collectively called **Vidneers** — your AI video engineering team.
 
 ### 1. Frontline Agent (ElevenLabs)
 The voice and audio interface for creator interactions.
