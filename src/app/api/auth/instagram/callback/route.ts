@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { supabase } from '@/lib/supabase';
-import { getInstagramAccountId } from '@/lib/instagram';
 
 function generateId() {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
@@ -17,6 +16,7 @@ export async function GET(request: NextRequest) {
   cookieStore.delete('link_instagram_user_id');
 
   if (error) {
+    console.error('Instagram OAuth error:', error, searchParams.get('error_description'));
     return NextResponse.redirect(
       `${process.env.NEXTAUTH_URL}/dashboard?error=instagram_oauth_cancelled`
     );
@@ -35,22 +35,30 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const tokenResponse = await fetch(
-      'https://graph.facebook.com/v19.0/oauth/access_token',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          code,
-          client_id: process.env.INSTAGRAM_APP_ID || '',
-          client_secret: process.env.INSTAGRAM_APP_SECRET || '',
-          redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/instagram/callback`,
-          grant_type: 'authorization_code',
-        }),
-      }
-    );
+    // Build redirect URI - must match exactly what was used in OAuth request
+    const baseUrl = (process.env.NEXTAUTH_URL || '').replace(/\/$/, '');
+    const redirectUri = `${baseUrl}/api/auth/instagram/callback`;
+
+    const clientId = process.env.INSTAGRAM_APP_ID || '';
+    const clientSecret = process.env.INSTAGRAM_APP_SECRET || '';
+
+    console.log('Token exchange redirect_uri:', redirectUri);
+
+    // Exchange code for short-lived access token using Instagram API
+    const formData = new URLSearchParams();
+    formData.append('client_id', clientId);
+    formData.append('client_secret', clientSecret);
+    formData.append('grant_type', 'authorization_code');
+    formData.append('redirect_uri', redirectUri);
+    formData.append('code', code);
+
+    const tokenResponse = await fetch('https://api.instagram.com/oauth/access_token', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
 
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.text();
@@ -61,13 +69,46 @@ export async function GET(request: NextRequest) {
     }
 
     const tokens = await tokenResponse.json();
-    const accessToken = tokens.access_token;
+    const shortLivedToken = tokens.access_token;
+    const instagramUserId = tokens.user_id?.toString();
 
-    const instagramAccountId = await getInstagramAccountId(accessToken);
+    console.log('Got short-lived token for user:', instagramUserId);
+
+    // Exchange for long-lived token (valid for 60 days)
+    const longLivedResponse = await fetch(
+      `https://graph.instagram.com/access_token?` +
+      `grant_type=ig_exchange_token` +
+      `&client_secret=${clientSecret}` +
+      `&access_token=${shortLivedToken}`
+    );
+
+    let finalAccessToken = shortLivedToken;
+    let expiresIn = 3600; // default 1 hour for short-lived
+
+    if (longLivedResponse.ok) {
+      const longLivedData = await longLivedResponse.json();
+      finalAccessToken = longLivedData.access_token;
+      expiresIn = longLivedData.expires_in || 5184000; // 60 days
+      console.log('Exchanged for long-lived token, expires in:', expiresIn);
+    } else {
+      console.error('Failed to get long-lived token:', await longLivedResponse.text());
+    }
+
+    // Get Instagram user profile to verify
+    const profileResponse = await fetch(
+      `https://graph.instagram.com/me?fields=user_id,username&access_token=${finalAccessToken}`
+    );
+
+    let instagramAccountId = instagramUserId;
+    if (profileResponse.ok) {
+      const profile = await profileResponse.json();
+      instagramAccountId = profile.user_id || profile.id || instagramUserId;
+      console.log('Instagram profile:', profile);
+    }
 
     if (!instagramAccountId) {
       return NextResponse.redirect(
-        `${process.env.NEXTAUTH_URL}/dashboard?error=instagram_no_business_account`
+        `${process.env.NEXTAUTH_URL}/dashboard?error=instagram_no_account_id`
       );
     }
 
@@ -90,11 +131,9 @@ export async function GET(request: NextRequest) {
       await supabase
         .from('Account')
         .update({
-          access_token: accessToken,
-          expires_at: tokens.expires_in
-            ? Math.floor(Date.now() / 1000) + tokens.expires_in
-            : null,
-          token_type: tokens.token_type || 'bearer',
+          access_token: finalAccessToken,
+          expires_at: Math.floor(Date.now() / 1000) + expiresIn,
+          token_type: 'bearer',
         })
         .eq('id', existingAccount.id);
     } else {
@@ -105,11 +144,9 @@ export async function GET(request: NextRequest) {
         type: 'oauth',
         provider: 'instagram',
         providerAccountId: instagramAccountId,
-        access_token: accessToken,
-        expires_at: tokens.expires_in
-          ? Math.floor(Date.now() / 1000) + tokens.expires_in
-          : null,
-        token_type: tokens.token_type || 'bearer',
+        access_token: finalAccessToken,
+        expires_at: Math.floor(Date.now() / 1000) + expiresIn,
+        token_type: 'bearer',
       });
     }
 

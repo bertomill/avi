@@ -25,7 +25,7 @@ export async function GET() {
   const baseUrl = process.env.NEXTAUTH_URL?.trim();
   const redirectUri = `${baseUrl}/api/auth/link-youtube/callback`;
   const scope = encodeURIComponent(
-    'openid email profile https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly'
+    'openid email profile https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly https://www.googleapis.com/auth/youtube.upload'
   );
 
   const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +

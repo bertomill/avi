@@ -1,27 +1,23 @@
 import { InstagramAccountData, InstagramMediaData, InstagramAnalytics } from '@/types';
 
-const INSTAGRAM_GRAPH_URL = 'https://graph.facebook.com/v19.0';
+const INSTAGRAM_GRAPH_URL = 'https://graph.instagram.com';
 
 export async function getInstagramAccountId(accessToken: string): Promise<string | null> {
   try {
-    const pagesResponse = await fetch(
-      `${INSTAGRAM_GRAPH_URL}/me/accounts?fields=id,name,instagram_business_account&access_token=${accessToken}`
+    // For Instagram Login, get user ID directly from /me endpoint
+    const response = await fetch(
+      `${INSTAGRAM_GRAPH_URL}/me?fields=user_id,username&access_token=${accessToken}`
     );
 
-    if (!pagesResponse.ok) {
-      console.error('Failed to fetch Facebook pages:', await pagesResponse.text());
+    if (!response.ok) {
+      console.error('Failed to fetch Instagram user:', await response.text());
       return null;
     }
 
-    const pagesData = await pagesResponse.json();
+    const data = await response.json();
+    console.log('Instagram user:', JSON.stringify(data, null, 2));
 
-    for (const page of pagesData.data || []) {
-      if (page.instagram_business_account?.id) {
-        return page.instagram_business_account.id;
-      }
-    }
-
-    return null;
+    return data.user_id || data.id || null;
   } catch (error) {
     console.error('Error getting Instagram account ID:', error);
     return null;
@@ -33,8 +29,10 @@ export async function getAccountData(
   accessToken: string
 ): Promise<InstagramAccountData | null> {
   try {
+    // Use Instagram Graph API to get user profile data
+    // Note: Some fields may require additional permissions
     const response = await fetch(
-      `${INSTAGRAM_GRAPH_URL}/${accountId}?fields=id,username,name,biography,profile_picture_url,followers_count,follows_count,media_count&access_token=${accessToken}`
+      `${INSTAGRAM_GRAPH_URL}/me?fields=user_id,username,name,account_type,profile_picture_url,followers_count,follows_count,media_count&access_token=${accessToken}`
     );
 
     if (!response.ok) {
@@ -45,10 +43,10 @@ export async function getAccountData(
     const data = await response.json();
 
     return {
-      id: data.id,
+      id: data.user_id || data.id || accountId,
       username: data.username || '',
-      name: data.name || '',
-      biography: data.biography || '',
+      name: data.name || data.username || '',
+      biography: '', // Not available with instagram_business_basic
       profilePictureUrl: data.profile_picture_url || '',
       followerCount: data.followers_count || 0,
       followingCount: data.follows_count || 0,
@@ -66,8 +64,9 @@ export async function getMediaData(
   limit: number = 25
 ): Promise<InstagramMediaData[]> {
   try {
+    // Use Instagram Graph API to get user's media
     const response = await fetch(
-      `${INSTAGRAM_GRAPH_URL}/${accountId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=${limit}&access_token=${accessToken}`
+      `${INSTAGRAM_GRAPH_URL}/me/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=${limit}&access_token=${accessToken}`
     );
 
     if (!response.ok) {

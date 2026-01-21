@@ -275,3 +275,35 @@ export interface MediumAnalytics {
     categories: string[];
   };
 }
+
+// Video Analysis Types (Gemini)
+export interface TimestampedNote {
+  timestamp: string; // e.g., "0:05" or "0:12-0:18"
+  note: string;
+}
+
+export interface VideoAnalysisCategory {
+  score: number;
+  feedback: string;
+  tips: string[];
+  timestamps?: TimestampedNote[];
+}
+
+export interface VideoAnalysis {
+  overallScore: number;
+  delivery: VideoAnalysisCategory;
+  pacing: VideoAnalysisCategory;
+  content: VideoAnalysisCategory;
+  engagement: VideoAnalysisCategory;
+  summary: string;
+  strengths: string[];
+  improvements: string[];
+  keyMoments?: TimestampedNote[];
+}
+
+export interface CompletedVideo {
+  url: string;
+  blob: Blob;
+  title: string;
+  duration: number;
+}
